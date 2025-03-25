@@ -1,134 +1,140 @@
-import { useState, useRef } from 'react';
-import PropTypes from 'prop-types';
-import axios from 'axios';
-import Box from '@mui/material/Box';
-import Button from '@mui/material/Button';
-import Container from '@mui/material/Container';
-import FormControl from '@mui/material/FormControl';
-import InputLabel from '@mui/material/InputLabel';
-import MenuItem from '@mui/material/MenuItem';
-import Select from '@mui/material/Select';
-import Typography from '@mui/material/Typography';
-import PlayArrowIcon from '@mui/icons-material/PlayArrow';
-import PauseIcon from '@mui/icons-material/Pause';
-import StopIcon from '@mui/icons-material/Stop';
+import  { useState } from 'react';
+import {
+  Box,
+  Typography,
+  Select,
+  MenuItem,
+  FormControl,
+  InputLabel,
+  Button,
+  TextField,
+  Alert,
+  CircularProgress,
+} from '@mui/material';
 
-const AudioBible = ({ bibleBooks }) => {
-  const [currentBook, setCurrentBook] = useState('Genesis');
-  const [currentChapter, setCurrentChapter] = useState(1);
-  const [audioUrl, setAudioUrl] = useState(null);
-  const audioRef = useRef(null);
+// --- API Configuration ---
+const SPEECHIFY_API_KEY = 'Z4uYFD4S8528Own5yKs1aC0T1UKvOXkK5zpggQpiC_0='; // Your Speechify API Key
+const SPEECHIFY_API_URL = 'https://api.sws.speechify.com/v1/audio/stream';
 
-  const handleBookChange = (event) => {
-    setCurrentBook(event.target.value);
-    setCurrentChapter(1);
+const AudioBible = () => {
+  const [textToSpeak, setTextToSpeak] = useState('');
+  const [selectedVoice, setSelectedVoice] = useState('anthony');
+  const [audio, setAudio] = useState(null);
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [error, setError] = useState(null);
+  const [isLoading, setIsLoading] = useState(false);
+
+  const handleTextChange = (event) => {
+    setTextToSpeak(event.target.value);
   };
 
-  const handleChapterChange = (event) => {
-    setCurrentChapter(Number(event.target.value));
+  const handleVoiceChange = (event) => {
+    setSelectedVoice(event.target.value);
   };
 
   const handlePlay = async () => {
-    const currentBookData = bibleBooks[currentBook];
-    const currentChapterData = currentBookData.chapters.find((chapter) => chapter.chapter === currentChapter);
-    const text = currentChapterData.verses.map((verse) => `Verse ${verse.verse}: ${verse.text}`).join(' ');
-
+    setIsLoading(true);
+    setError(null);
+    if (!textToSpeak) {
+      setError('Please enter text to speak.');
+      setIsLoading(false);
+      return;
+    }
     try {
-      const response = await axios.post(
-        'https://api.elevenlabs.io/v1/text-to-speech',
-        {
-          text,
-          voice: 'DADfd8MU5O5IXSrkHxkn', // Replace with your custom voice ID
+      const options = {
+        method: 'POST',
+        headers: {
+          Accept: 'audio/mpeg',
+          Authorization: `Bearer ${SPEECHIFY_API_KEY}`,
+          'Content-Type': 'application/json',
         },
-        {
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${import.meta.env.VITE_ELEVENLABS_API_KEY}`,
-          },
-        }
-      );
+        body: JSON.stringify({ input: textToSpeak, voice_id: selectedVoice }),
+      };
 
-      const audioBlob = new Blob([response.data], { type: 'audio/mpeg' });
+      const response = await fetch(SPEECHIFY_API_URL, options);
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(`Speechify API error: ${response.status} - ${errorData.message}`);
+      }
+      const audioBlob = await response.blob();
       const audioUrl = URL.createObjectURL(audioBlob);
-      setAudioUrl(audioUrl);
-      audioRef.current.play();
-    } catch (error) {
-      console.error('Error generating audio:', error);
+      const newAudio = new Audio(audioUrl);
+      setAudio(newAudio);
+      newAudio.play().then(() => {
+        setIsPlaying(true);
+        setIsLoading(false);
+      }).catch((err) => {
+        setError("Error playing audio.");
+        console.error("Error playing audio:", err);
+        setIsLoading(false);
+      });
+    } catch (err) {
+      setError(`Error loading audio: ${err.message}`);
+      console.error('Error loading audio:', err);
+      setIsLoading(false);
     }
   };
 
   const handlePause = () => {
-    if (audioRef.current) {
-      audioRef.current.pause();
+    if (audio) {
+      audio.pause();
+      setIsPlaying(false);
     }
   };
 
   const handleStop = () => {
-    if (audioRef.current) {
-      audioRef.current.pause();
-      audioRef.current.currentTime = 0;
+    if (audio) {
+      audio.pause();
+      audio.currentTime = 0;
+      setIsPlaying(false);
     }
   };
 
   return (
-    <Container maxWidth="md">
-      <Typography variant="h5" component="h3" gutterBottom>
-        {currentBook} {currentChapter}
+    <Box sx={{ p: 3, display: 'flex', flexDirection: 'column', gap: 2 }}>
+      <Typography variant="h4" align="center" gutterBottom>
+        Speechify Audio Player
       </Typography>
 
-      <Box display="flex" justifyContent="space-between" mb={2}>
-        <FormControl variant="outlined" fullWidth>
-          <InputLabel id="book-select-label">Book</InputLabel>
-          <Select
-            labelId="book-select-label"
-            value={currentBook}
-            onChange={handleBookChange}
-            label="Book"
-          >
-            {Object.keys(bibleBooks).map((book) => (
-              <MenuItem key={book} value={book}>{book}</MenuItem>
-            ))}
-          </Select>
-        </FormControl>
-        <Box width={16} />
-        <FormControl variant="outlined" fullWidth>
-          <InputLabel id="chapter-select-label">Chapter</InputLabel>
-          <Select
-            labelId="chapter-select-label"
-            value={currentChapter}
-            onChange={handleChapterChange}
-            label="Chapter"
-          >
-            {bibleBooks[currentBook].chapters.map((chapter) => (
-              <MenuItem key={chapter.chapter} value={chapter.chapter}>{chapter.chapter}</MenuItem>
-            ))}
-          </Select>
-        </FormControl>
-      </Box>
+      {error && <Alert severity="error">{error}</Alert>}
 
-      <Box display="flex" justifyContent="center" mb={2}>
-        <Button variant="contained" color="primary" onClick={handlePlay} startIcon={<PlayArrowIcon />}>
-          Play
+      <TextField
+        label="Enter Text to Speak"
+        multiline
+        rows={4}
+        fullWidth
+        value={textToSpeak}
+        onChange={handleTextChange}
+      />
+
+      <FormControl fullWidth>
+        <InputLabel id="voice-select-label">Voice</InputLabel>
+        <Select
+          labelId="voice-select-label"
+          id="voice-select"
+          value={selectedVoice}
+          label="Voice"
+          onChange={handleVoiceChange}
+        >
+          <MenuItem value="anthony">Anthony</MenuItem>
+          <MenuItem value="stacy">Stacy</MenuItem>
+        </Select>
+      </FormControl>
+
+      <Box sx={{ display: 'flex', gap: 2, justifyContent: 'center' }}>
+        <Button variant="contained" onClick={handlePlay} disabled={isLoading}>
+          {isLoading ? <CircularProgress size={24} /> : "Play"}
         </Button>
-        <Box width={16} />
-        <Button variant="contained" color="primary" onClick={handlePause} startIcon={<PauseIcon />}>
+        <Button variant="contained" onClick={handlePause} disabled={!isPlaying}>
           Pause
         </Button>
-        <Box width={16} />
-        <Button variant="contained" color="primary" onClick={handleStop} startIcon={<StopIcon />}>
+        <Button variant="contained" onClick={handleStop} disabled={!isPlaying}>
           Stop
         </Button>
       </Box>
-
-      {audioUrl && (
-        <audio ref={audioRef} src={audioUrl} controls style={{ display: 'none' }} />
-      )}
-    </Container>
+    </Box>
   );
-};
-
-AudioBible.propTypes = {
-  bibleBooks: PropTypes.object.isRequired,
 };
 
 export default AudioBible;

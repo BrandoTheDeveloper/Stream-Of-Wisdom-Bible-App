@@ -30,6 +30,7 @@ export default defineConfig(({ mode }) => {
                     globPatterns: ['**/*.{js,css,html,svg,png,ico}'],
                     cleanupOutdatedCaches: true,
                     clientsClaim: true,
+                    maximumFileSizeToCacheInBytes: 10 * 1024 * 1024, // Example: set the limit to 10 MB (adjust as needed)
                 },
                 devOptions: {
                     enabled: false,
@@ -52,6 +53,9 @@ export default defineConfig(({ mode }) => {
                     },
                 },
             },
+        },
+        build: {
+            chunkSizeWarningLimit: 8000, // We discussed this earlier
         },
     };
 });
